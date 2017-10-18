@@ -1,0 +1,54 @@
+const {createHook, triggerAsyncId, executionAsyncId} = require('async_hooks')
+
+const db = new Map()
+
+const skipByType = new Set @#
+  'PROMISE'
+  'TIMERWRAP'
+  'TickObject'
+
+const hook = createHook @:
+  destroy(asyncId) ::
+    db.delete @ asyncId
+
+  init(asyncId, type, triggerId, resource) ::
+    const ctx = db.get(triggerId) || null
+
+    if null === ctx  ::
+      db.set @ asyncId, Object.create @ null, @:
+        _rootAsyncId_: { value: asyncId }
+        _asyncId_: { value: asyncId }
+        inspect: { value: inspect_cps_context }
+
+    else if ! skipByType.has(type) ::
+      db.set @ asyncId,
+        Object.create @ ctx, @:
+          _asyncId_: { value: asyncId }
+
+    else ::
+      db.set @ asyncId, ctx
+
+function inspect_cps_context() :: return `«cps_context ${this._asyncId_} ${this._rootAsyncId_}»`
+
+export default function cps_context(useTriggerId) ::
+  return db.get @ useTriggerId ? triggerAsyncId() : executionAsyncId()
+
+module.exports = exports = Object.assign @ cps_context, @:
+  default: cps_context
+  tip: cps_context
+
+  isActive() :: return hook.active
+
+  install() ::
+    if undefined !== hook && ! hook.active ::
+      hook.enable()
+      hook.active = true
+    return this
+
+  uninstall() ::
+    db.clear()
+    if undefined !== hook ::
+      hook.disable()
+      hook.active = false
+    return this
+
